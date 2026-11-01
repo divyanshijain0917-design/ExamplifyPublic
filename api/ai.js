@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Invalid prompt" });
     const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
     let r, j, think = true;
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       const body = JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: Object.assign({ maxOutputTokens: 8000, responseMimeType: "application/json" }, think ? { thinkingConfig: { thinkingBudget: 0 } } : {})
@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
       j = await r.json();
       if (r.status === 400 && think) { think = false; i--; continue; }
       if (r.ok || (r.status !== 429 && r.status !== 503 && r.status !== 500)) break;
-      await new Promise(x => setTimeout(x, 2000 * (i + 1)));
+      await new Promise(x => setTimeout(x, 1500 * (i + 1)));
     }
     if (!r.ok) return res.status(502).json({ error: (j.error && j.error.message) || "API error" });
     const text = ((j.candidates && j.candidates[0] && j.candidates[0].content.parts) || []).map(p => p.text || "").join("");
