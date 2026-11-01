@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Examplify</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#f6f4ff;--card:#fff;--ink:#1d1b3a;--mut:#6b6990;--pri:#5b4bdb;--pri2:#ece9ff;--ok:#1f9d6b;--bad:#d64545;--line:#e3e0f5;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#12111f;--card:#1c1a30;--ink:#eeeaff;--mut:#a9a5cc;--pri:#8d80ff;--pri2:#2a2650;--line:#2f2b52}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{max-width:480px;margin:0 auto;padding:16px 16px 110px}
+h1{margin:0;font-size:26px}h2{font-size:24px;line-height:1.2;margin:18px 0 6px}h3{font-size:12px;letter-spacing:.08em;color:var(--pri);margin:18px 0 6px}
+.m,small{color:var(--mut)}.hero{display:flex;gap:10px;align-items:center}.logo{width:38px;height:38px;border-radius:12px;background:var(--pri);color:#fff;display:grid;place-items:center;font-weight:800}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.chip,.tab{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:8px 14px;font:inherit;cursor:pointer}
+.chip.on,.tab.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.btn{width:100%;background:var(--pri);color:#fff;border:0;border-radius:14px;padding:13px;font:600 16px inherit;cursor:pointer;margin-top:10px}
+.btn.s{background:var(--pri2);color:var(--pri)}.btn:disabled{opacity:.5}.lnk{display:block;margin:10px auto;background:none;border:0;color:var(--mut);font:inherit;cursor:pointer}
+input[type=text],textarea,select{width:100%;padding:11px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit}textarea{min-height:90px}
+.row{display:flex;gap:10px;align-items:flex-start;margin:12px 0}.drop{border:2px dashed var(--pri);border-radius:18px;text-align:center;padding:26px 12px;cursor:pointer;background:var(--pri2)}
+.p{padding:10px;border-radius:12px;border:1px solid transparent;cursor:pointer;margin:4px 0}.p.sel{background:var(--pri2);border-color:var(--pri)}
+.bar{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));max-width:480px;margin:auto;padding:0 16px}
+nav{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:auto;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;border:0;padding:12px 0;color:var(--mut);font:600 12px inherit;cursor:pointer}nav button.on{color:var(--pri)}
+.tabs{display:flex;gap:8px;overflow-x:auto;margin:12px 0}.err{color:var(--bad);margin:8px 0}.ok{color:var(--ok)}
+.opt{display:block;width:100%;text-align:left;margin:8px 0;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+.opt.good{border-color:var(--ok);background:rgba(31,157,107,.15)}.opt.bad{border-color:var(--bad);background:rgba(214,69,69,.15)}
+.fc{min-height:150px;display:grid;place-items:center;text-align:center;font-size:18px;cursor:pointer}.rate{display:flex;gap:8px}.rate .btn{margin:0}
+.map{overflow-x:auto}svg text{fill:var(--ink);font:12px system-ui}.spin{color:var(--mut)}ul{padding-left:20px;margin:6px 0}
+</style></head><body><div id="app"></div><nav id="nav"></nav>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const INT=["Cricket","Music","Movies","Gaming","Fashion","Travel","Food","Startups","Fitness","Art","Anime","Reels","Cars"];
+const LANGS=["English","Hindi","Bengali","Gujarati","Malayalam","Telugu","Tamil","Marathi"];
+let S={interests:[],consent:true,lang:"English",lib:[],streak:{d:"",n:0},onboarded:false,name:""};
+try{Object.assign(S,JSON.parse(localStorage.getItem("examplify")||"{}"))}catch(e){}
+const save=()=>{try{localStorage.setItem("examplify",JSON.stringify(S))}catch(e){}};
+let V=S.onboarded?"home":"onb",T={doc:null,sel:new Set(),cur:null,tab:"map",rt:"cards",cards:[],ci:0,flip:false,done:0,qs:[],qi:0,qa:null,score:0,pyq:null,busy:"",err:""};
+if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const API_URL="/api/ai";/* paste your backend URL here after deploying */
+async function ask(p){for(let i=0;;i++){try{return await ask1(p)}catch(e){if(i>=2||/available here/i.test(e.message))throw e;await new Promise(r=>setTimeout(r,1500*(i+1)))}}}
+async function ask1(p){if(API_URL){const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:p})});if(!r.ok){let d="";try{d=(await r.json()).error||""}catch(e){}throw new Error("The AI server returned an error"+(d?": "+d:"")+".")}const j=await r.json();const m=String(j.text||"").replace(/```json|```/g,"").match(/\{[\s\S]*\}/);return JSON.parse(m[0])}const sm=await window.claude?.use("sample");if(!sm)throw new Error("The AI helper isn’t available here. Open this page in Claude while signed in.");const r=await sm(p,{cache:false});const m=r.text.replace(/```json|```/g,"").match(/\{[\s\S]*\}/);return JSON.parse(m[0])}
+const ctx=()=>(S.consent&&S.interests.length?`Student interests: ${S.interests.join(", ")}. Build the example from ONE of them.`:"No interests shared: use a relatable college-life example.")+` Write all text values in ${S.lang} (keep key technical terms in English in brackets if not English). Audience: first-year college student. Use only facts from the given text; never invent facts.`;
+const chunk=t=>{const s=t.replace(/\s+/g," ").trim().split(/(?<=[.!?])\s+/),o=[];for(let i=0;i<s.length;i+=3)o.push(s.slice(i,i+3).join(" "));return o.filter(x=>x.length>15)};
+const dec=s=>s.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'");
+async function load(f){T.busy="Reading "+f.name+"…";T.err="";render();try{const n=f.name.toLowerCase();let ps=[],pg=1;
+if(n.endsWith(".pdf")){const p=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;pg=p.numPages;for(let i=1;i<=Math.min(pg,300);i++){const t=(await(await p.getPage(i)).getTextContent()).items.map(x=>x.str).join(" ");ps.push(...chunk(t))}}
+else if(n.endsWith(".pptx")){const z=await JSZip.loadAsync(f);const fs=Object.keys(z.files).filter(k=>/^ppt\/slides\/slide\d+\.xml$/.test(k)).sort((a,b)=>a.match(/\d+/)-b.match(/\d+/));pg=fs.length;for(const k of fs){const x=await z.files[k].async("string");const t=dec([...x.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m=>m[1]).join(" "));if(t.trim())ps.push(t)}}
+else if(n.endsWith(".ppt"))throw new Error("Old .ppt files can’t be read here. Save the file as .pptx or PDF and upload again.");
+else if(f.type.startsWith("image/")){const sm=await window.claude?.use("sample");if(!sm||!(await sm.limits()).images)throw new Error("Image reading isn’t available here. Paste the text instead.");const r=await sm("Transcribe all text in this image faithfully. Output only the text.",{images:[f]});ps=chunk(r.text)}
+else ps=chunk(await f.text());
+if(!ps.length)throw new Error("No readable text found. If this is a scan, upload it as an image or paste the text.");
+T.doc={name:f.name,paras:ps,pg};T.sel=new Set();V="doc"}catch(e){T.err=e.message||"Couldn’t read that file."}T.busy="";render()}
+async function study(text,more){V="study";T.busy="Making it easier…";T.err="";T.tab="map";render();
+try{const o=await ask(`${ctx()}\nExplain the selected text ${more?"even more simply, in shorter sentences, with a different example":"in simple student-friendly language"}.\nReturn ONLY JSON: {"title":"3-5 word topic","simple":"2-4 short friendly sentences, start with the core question","example_label":"interest used, e.g. CRICKET","example":"2-3 sentence example","takeaway":["short point","short point"]}\nTEXT:\n${text.slice(0,6000)}`);
+T.cur={text,o,ex:null};T.busy="";render();
+const ex=await ask(`${ctx()}\nReturn ONLY JSON: {"map":{"center":"","branches":[{"label":"","children":["",""]}]},"summary":["5 memory-friendly bullets"],"cards":[{"q":"","a":""}],"quiz":[{"q":"","options":["","","",""],"answer":0,"why":""}]}\nRules: max 4 branches, 2 children each, labels max 3 words; 5 flashcards; 4 quiz questions; quiz options similar in length, correct answer position varied, never the longest.\nTEXT:\n${text.slice(0,6000)}`);
+T.cur.ex=ex;buildRev()}catch(e){T.err=e.message||"Something went wrong. Try again.";T.busy=""}render()}
+function buildRev(){const all=[T.cur,...S.lib].filter(x=>x&&x.ex);T.cards=all.flatMap(x=>x.ex.cards||[]);T.qs=all.flatMap(x=>x.ex.quiz||[]);T.ci=0;T.flip=false;T.qi=0;T.qa=null;T.score=0}
+function mm(m){if(!m)return"";const b=(m.branches||[]).slice(0,4),cx=190,cy=160;let s=`<svg viewBox="0 0 380 320" width="100%" role="img" aria-label="Concept map">`;
+const wr=(t,x,y,w=14)=>{const ws=String(t).split(" "),l=[];let c="";ws.forEach(q=>{if((c+" "+q).length>w&&c){l.push(c);c=q}else c=(c+" "+q).trim()});l.push(c);return`<text x="${x}" y="${y-(l.length-1)*7}" text-anchor="middle">${l.map((q,i)=>`<tspan x="${x}" dy="${i?14:0}">${esc(q)}</tspan>`).join("")}</text>`};
+b.forEach((br,i)=>{const a=i/b.length*6.283-1.57,x=cx+Math.cos(a)*85,y=cy+Math.sin(a)*70;s+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--pri)" opacity=".5"/>`;
+(br.children||[]).slice(0,2).forEach((c,j)=>{const a2=a+(j?.5:-.5),X=cx+Math.cos(a2)*150,Y=cy+Math.sin(a2)*128;s+=`<line x1="${x}" y1="${y}" x2="${X}" y2="${Y}" stroke="var(--line)"/><rect x="${X-42}" y="${Y-15}" width="84" height="30" rx="9" fill="var(--card)" stroke="var(--line)"/>${wr(c,X,Y+4,15)}`});
+s+=`<rect x="${x-40}" y="${y-16}" width="80" height="32" rx="12" fill="var(--pri2)" stroke="var(--pri)"/>${wr(br.label,x,y+4,13)}`});
+return s+`<ellipse cx="${cx}" cy="${cy}" rx="52" ry="26" fill="var(--pri)"/><g style="--ink:#fff">${wr(m.center,cx,cy+4,14)}</g></svg>`}
+const onb=()=>`<div class=hero><div class=logo>E</div><h1>Examplify</h1></div><h2>Make examples that feel like you.</h2><p class=m>Pick a few interests. Examplify uses them to explain tough concepts with examples you actually care about.</p><input type=text id=nm placeholder="Your name (optional)" value="${esc(S.name)}"><div class=chips>${INT.map(i=>`<button class="chip ${S.interests.includes(i)?"on":""}" data-a=int data-v="${i}">${i}</button>`).join("")}</div><label class=row><input type=checkbox id=cons ${S.consent?"checked":""}><span><b>Use my interests for examples</b><br><small>Optional. Shared only with your consent. Change anytime.</small></span></label><button class=btn data-a=go>Continue</button><button class=lnk data-a=skip>Skip for now</button>`;
+const home=()=>`<div class=hero><div class=logo>E</div><div><h1>Hi${S.name?", "+esc(S.name.split(" ")[0]):""}</h1><small>Upload material</small></div></div>
+<label class="drop card" style="display:block;margin-top:16px"><input type=file id=fi hidden accept=".pdf,.pptx,.ppt,.txt,.md,image/*"><b>Tap to upload or drop a file</b><br><small>PDF · Image · PPT · Up to 300 pages free</small></label>
+${T.busy?`<p class=spin>${esc(T.busy)}</p>`:""}${T.err?`<p class=err>${esc(T.err)}</p>`:""}
+<h3>OR PASTE A TOPIC</h3><textarea id=pt placeholder="Paste a difficult paragraph or topic from your notes…"></textarea><button class=btn data-a=paste>Explain this</button>
+${S.lib.length?`<h3>CONTINUE</h3>`+S.lib.slice(0,3).map((x,i)=>`<button class=opt data-a=open data-v=${i}><b>${esc(x.o.title)}</b><br><small>${esc(x.date)}</small></button>`).join(""):""}`;
+const doc=()=>{const d=T.doc;return`<h2 style="font-size:20px">${esc(d.name)}</h2><small>${d.pg} page${d.pg>1?"s":""}${d.pg>300?" · free plan reads the first 300 (Plus unlocks longer PDFs)":""}</small><h3>SELECT WHAT YOU FIND DIFFICULT</h3><p class=m>Tap paragraphs, or highlight text, then explain just that part.</p>${d.paras.slice(0,500).map((p,i)=>`<div class="p ${T.sel.has(i)?"sel":""}" data-a=pick data-v=${i}>${esc(p)}</div>`).join("")}<div class=bar><button class=btn data-a=explain>Explain selected text${T.sel.size?" ("+T.sel.size+")":""}</button></div>`};
+function study_v(){const c=T.cur;if(T.busy&&!c)return`<h2>Study Companion</h2><p class=spin>${esc(T.busy)}</p>`;if(!c)return`<h2>Study Companion</h2>${T.err?`<p class=err>${esc(T.err)}</p>`:""}<p class=m>Upload material or paste a topic from Home, select what’s hard, and it shows up here.</p><button class=btn data-a=nav data-v=home>Go to Home</button>`;
+const o=c.o,x=c.ex,tabs=[["map","Visual map"],["quiz","Quick quiz"],["sum","Summary"],["cards","Flashcards"]];
+let body=!x?`<p class=spin>Building map, summary, flashcards and quiz…</p>`:T.tab=="map"?`<div class="card map">${mm(x.map)}</div>`:T.tab=="sum"?`<div class=card><ul>${(x.summary||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ul></div>`:T.tab=="cards"?`<div class=card>${(x.cards||[]).map(k=>`<p><b>${esc(k.q)}</b><br>${esc(k.a)}</p>`).join("")}</div><button class="btn s" data-a=nav data-v=revise>Practise in Revise</button>`:`<p class=m>Test yourself in Revise, one question at a time.</p><button class=btn data-a=quizgo>Start quick quiz</button>`;
+return`<h2 style="font-size:22px">Study Companion</h2><div class=row style="align-items:center"><b style="flex:1">${esc(o.title)}</b><select id=lg style="width:auto">${LANGS.map(l=>`<option ${l==S.lang?"selected":""}>${l}</option>`).join("")}</select></div>
+<h3>UPLOADED NOTES</h3><div class=card><small>${esc(c.text.slice(0,260))}${c.text.length>260?"…":""}</small></div>
+<h3>SIMPLE EXPLANATION</h3><div class=card><b>${esc(o.simple)}</b></div><h3>${esc((o.example_label||"EXAMPLE").toUpperCase())} EXAMPLE</h3><div class=card>${esc(o.example)}</div>
+<h3>KEY TAKEAWAY</h3><div class=card><ul>${(o.takeaway||[]).map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>
+<div class=row><button class="btn s" data-a=simpler>Simplify more</button><button class="btn s" data-a=nav data-v=revise>Make flashcards</button></div>
+<div class=tabs>${tabs.map(t=>`<button class="tab ${T.tab==t[0]?"on":""}" data-a=tab data-v=${t[0]}>${t[1]}</button>`).join("")}</div>${body}
+${T.err?`<p class=err>${esc(T.err)}</p>`:""}<button class="btn s" data-a=savecur>Save to Library</button><p class=m style="text-align:center"><small>AI can make mistakes. Check key facts against your original notes.</small></p>`}
+function revise(){const tabs=[["cards","Flashcards"],["quiz","Quiz"],["pyq","PYQ insights"]];let b="";
+if(T.rt=="cards"){const k=T.cards[T.ci];b=!k?`<p class=m>No flashcards yet. Explain a topic first and they’ll be made automatically.</p>`:`<small>QUESTION · Today’s session ${Math.min(T.done+1,T.cards.length+T.done)}</small><div class="card fc" data-a=flip>${T.flip?esc(k.a):esc(k.q)+"<br><small>Tap to reveal</small>"}</div>${T.flip?`<p class=m>How well did you recall?</p><div class=rate><button class="btn s" data-a=rate data-v=0>Again</button><button class="btn s" data-a=rate data-v=1>Hard</button><button class=btn data-a=rate data-v=2>Easy</button></div>`:""}`}
+else if(T.rt=="quiz"){const q=T.qs[T.qi];b=!T.qs.length?`<p class=m>No quiz yet. Explain a topic first.</p>`:!q?`<div class=card><b>Quiz done: ${T.score} / ${T.qs.length}</b></div><button class=btn data-a=quizgo>Try again</button>`:`<small>Question ${T.qi+1} of ${T.qs.length}</small><div class=card><b>${esc(q.q)}</b></div>${q.options.map((op,i)=>`<button class="opt ${T.qa==null?"":i==q.answer?"good":i==T.qa?"bad":""}" data-a=qpick data-v=${i} ${T.qa!=null?"disabled":""}>${esc(op)}</button>`).join("")}${T.qa!=null?`<p>${T.qa==q.answer?`<span class=ok>Correct.</span>`:`<span class=err>Not quite.</span>`} ${esc(q.why||"")}</p><button class=btn data-a=qnext>Next</button>`:""}`}
+else{const p=T.pyq;b=`<p class=m>Paste past-year questions (PYQs) for this subject to see recurring themes.</p><textarea id=py placeholder="Paste PYQs, one per line…"></textarea><button class=btn data-a=pyqgo>Find recurring themes</button>${T.busy?`<p class=spin>${esc(T.busy)}</p>`:""}${T.err?`<p class=err>${esc(T.err)}</p>`:""}${p?`<div class=card><b>PYQ INSIGHT</b>${(p.themes||[]).map(t=>`<p>${esc(t.theme)}<br><small>Appears in ${t.count} of ${p.n} questions</small></p>`).join("")}<small>Shows recurring themes only. Not a prediction.</small></div>`:`<p class=m><small>No past papers added yet, so no insights are shown.</small></p>`}`}
+return`<h2 style="font-size:22px">Revise &amp; recall</h2><p class=m>🔥 ${S.streak.n} day streak</p><div class=tabs>${tabs.map(t=>`<button class="tab ${T.rt==t[0]?"on":""}" data-a=rtab data-v=${t[0]}>${t[1]}</button>`).join("")}</div>${b}`}
+const library=()=>`<h2 style="font-size:22px">Library</h2>${S.lib.length?S.lib.map((x,i)=>`<div class=card><b>${esc(x.o.title)}</b><br><small>${esc(x.date)}</small><div class=row><button class="btn s" data-a=open data-v=${i}>Open</button><button class="btn s" data-a=del data-v=${i}>Delete</button></div></div>`).join(""):`<p class=m>Nothing saved yet. Save a study from the Study tab.</p>`}`;
+const profile=()=>`<h2 style="font-size:22px">Profile</h2><input type=text id=nm value="${esc(S.name)}" placeholder="Your name"><p class=m>College student · Year 1</p><h3>YOUR INTERESTS</h3><div class=chips>${INT.map(i=>`<button class="chip ${S.interests.includes(i)?"on":""}" data-a=pint data-v="${i}">${i}</button>`).join("")}</div>
+<label class=row><input type=checkbox id=cons ${S.consent?"checked":""}><span><b>Use my interests for examples</b><br><small>Optional. Shared only with your consent. Change anytime.</small></span></label>
+<h3>EXPLANATION LANGUAGE</h3><select id=lg>${LANGS.map(l=>`<option ${l==S.lang?"selected":""}>${l}</option>`).join("")}</select>
+<div class=card><b>Free for all students</b><br><small>All core features free for documents up to 300 pages. Plus (about ₹49/month or ₹299/year) removes ads, adds app themes and allows PDFs over 300 pages.</small></div>
+<button class="btn s" data-a=wipe>Delete my saved data</button>`;
+function render(){$("#app").innerHTML=({onb,home,doc,study:study_v,revise,library,profile})[V]();const nv=V=="doc"?"home":V;$("#nav").innerHTML=V=="onb"?"":[["home","Home"],["library","Library"],["study","Study"],["revise","Revise"],["profile","Profile"]].map(t=>`<button class="${nv==t[0]?"on":""}" data-a=nav data-v=${t[0]}>${t[1]}</button>`).join("");$("#nav").style.display=V=="onb"?"none":"flex"}
+const tog=(l,v)=>{const i=l.indexOf(v);i<0?l.push(v):l.splice(i,1)};
+document.addEventListener("click",async e=>{const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,v=b.dataset.v;
+if(a=="int"||a=="pint"){tog(S.interests,v);save();if(a=="int")S.name=$("#nm").value,S.consent=$("#cons").checked;render()}
+else if(a=="go"||a=="skip"){if(a=="go"){S.name=$("#nm").value;S.consent=$("#cons").checked}else{S.interests=[]}S.onboarded=true;save();V="home";render()}
+else if(a=="nav"){V=v;T.err="";if(v=="revise")buildRev();render()}
+else if(a=="pick"){tog([...T.sel],0);T.sel.has(+v)?T.sel.delete(+v):T.sel.add(+v);render();window.scrollTo(0,window.scrollY)}
+else if(a=="explain"){const g=String(getSelection()).trim();const t=T.sel.size?[...T.sel].sort((x,y)=>x-y).map(i=>T.doc.paras[i]).join("\n"):g;if(t.length<10){T.err="";alert("Select a paragraph or highlight some text first.");return}study(t)}
+else if(a=="paste"){const t=$("#pt").value.trim();if(t.length<10){T.err="Paste at least a sentence or two.";render();return}study(t)}
+else if(a=="simpler")study(T.cur.text,true);
+else if(a=="tab"){T.tab=v;render()}else if(a=="rtab"){T.rt=v;T.err="";render()}
+else if(a=="flip"){T.flip=!T.flip;render()}
+else if(a=="rate"){const k=T.cards[T.ci];const t=new Date().toDateString(),y=new Date(Date.now()-864e5).toDateString();if(S.streak.d!=t){S.streak={d:t,n:S.streak.d==y?S.streak.n+1:1};save()}T.done++;if(v=="0"||v=="1"){T.cards.push(k)}T.cards.splice(T.ci,1);if(T.ci>=T.cards.length)T.ci=0;T.flip=false;render()}
+else if(a=="quizgo"){buildRev();T.rt="quiz";V="revise";render()}
+else if(a=="qpick"){T.qa=+v;if(T.qa==T.qs[T.qi].answer)T.score++;render()}
+else if(a=="qnext"){T.qi++;T.qa=null;render()}
+else if(a=="pyqgo"){const t=$("#py").value.trim();if(t.length<20){T.err="Paste a few questions first.";render();return}T.busy="Finding themes…";T.err="";render();try{T.pyq=await ask(`Group these past exam questions into recurring themes. Count only what is in the list; do not predict. Return ONLY JSON: {"n":number of questions,"themes":[{"theme":"short name","count":number}]}\n${t.slice(0,6000)}`)}catch(x){T.err=x.message}T.busy="";render()}
+else if(a=="savecur"){if(!T.cur)return;S.lib.unshift({o:T.cur.o,text:T.cur.text.slice(0,4000),ex:T.cur.ex,date:new Date().toLocaleDateString()});save();alert("Saved to Library")}
+else if(a=="open"){const x=S.lib[+v];T.cur={text:x.text,o:x.o,ex:x.ex};V="study";T.tab="map";render()}
+else if(a=="del"){S.lib.splice(+v,1);save();render()}
+else if(a=="wipe"){if(confirm("Delete your interests, saved studies and streak from this browser?")){S={interests:[],consent:true,lang:"English",lib:[],streak:{d:"",n:0},onboarded:false,name:""};save();V="onb";render()}}});
+document.addEventListener("change",e=>{const t=e.target;if(t.id=="fi"&&t.files[0])load(t.files[0]);
+else if(t.id=="lg"){S.lang=t.value;save();if(V=="study"&&T.cur)study(T.cur.text);}
+else if(t.id=="cons"){S.consent=t.checked;save()}else if(t.id=="nm"){S.name=t.value;save()}});
+render();
+</script></body></html>
