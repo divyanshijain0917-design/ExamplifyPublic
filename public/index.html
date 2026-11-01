@@ -49,11 +49,15 @@ else if(f.type.startsWith("image/")){const sm=await window.claude?.use("sample")
 else ps=chunk(await f.text());
 if(!ps.length)throw new Error("No readable text found. If this is a scan, upload it as an image or paste the text.");
 T.doc={name:f.name,paras:ps,pg};T.sel=new Set();V="doc"}catch(e){T.err=e.message||"Couldn’t read that file."}T.busy="";render()}
-async function study(text,more){V="study";T.busy="Making it easier…";T.err="";T.tab="map";render();
-try{const o=await ask(`${ctx()}\nExplain the selected text ${more?"even more simply, in shorter sentences, with a different example":"in simple student-friendly language"}.\nReturn ONLY JSON: {"title":"3-5 word topic","simple":"2-4 short friendly sentences, start with the core question","example_label":"interest used, e.g. CRICKET","example":"2-3 sentence example","takeaway":["short point","short point"]}\nTEXT:\n${text.slice(0,6000)}`);
-T.cur={text,o,ex:null};T.busy="";render();
-const ex=await ask(`${ctx()}\nReturn ONLY JSON: {"map":{"center":"","branches":[{"label":"","children":["",""]}]},"summary":["5 memory-friendly bullets"],"cards":[{"q":"","a":""}],"quiz":[{"q":"","options":["","","",""],"answer":0,"why":""}]}\nRules: max 4 branches, 2 children each, labels max 3 words; 5 flashcards; 4 quiz questions; quiz options similar in length, correct answer position varied, never the longest.\nTEXT:\n${text.slice(0,6000)}`);
-T.cur.ex=ex;buildRev()}catch(e){T.err=e.message||"Something went wrong. Try again.";T.busy=""}render()}
+async function study(text,more){V="study";T.busy="Making it easier…";T.err="";T.tab="map";T.cur=null;render();
+const tx="\nTEXT:\n"+text.slice(0,6000);
+const pA=ask(`${ctx()}\nReturn ONLY JSON: {"map":{"center":"","branches":[{"label":"","children":["",""]}]},"summary":["5 memory-friendly bullets"]}\nRules: max 4 branches, 2 children each, labels max 3 words.${tx}`);
+const pB=ask(`${ctx()}\nReturn ONLY JSON: {"cards":[{"q":"","a":""}],"quiz":[{"q":"","options":["","","",""],"answer":0,"why":""}]}\nRules: 5 flashcards; 4 quiz questions; quiz options similar in length, correct answer position varied, never the longest.${tx}`);
+pA.catch(()=>{});pB.catch(()=>{});
+try{const o=await ask(`${ctx()}\nExplain the selected text ${more?"even more simply, in shorter sentences, with a different example":"in simple student-friendly language"}.\nReturn ONLY JSON: {"title":"3-5 word topic","simple":"2-4 short friendly sentences, start with the core question","example_label":"interest used, e.g. CRICKET","example":"2-3 sentence example","takeaway":["short point","short point"]}${tx}`);
+const cur={text,o,ex:{}};T.cur=cur;T.busy="";render();
+const hold=p=>p.then(r=>{Object.assign(cur.ex,r);if(T.cur===cur){buildRev();if(V=="study")render()}}).catch(()=>{cur.fail=true;if(T.cur===cur&&V=="study")render()});
+await Promise.all([hold(pA),hold(pB)])}catch(e){T.err=e.message||"Something went wrong. Try again.";T.busy=""}render()}
 function buildRev(){const all=[T.cur,...S.lib].filter(x=>x&&x.ex);T.cards=all.flatMap(x=>x.ex.cards||[]);T.qs=all.flatMap(x=>x.ex.quiz||[]);T.ci=0;T.flip=false;T.qi=0;T.qa=null;T.score=0}
 function mm(m){if(!m)return"";const b=(m.branches||[]).slice(0,4),cx=190,cy=160;let s=`<svg viewBox="0 0 380 320" width="100%" role="img" aria-label="Concept map">`;
 const wr=(t,x,y,w=14)=>{const ws=String(t).split(" "),l=[];let c="";ws.forEach(q=>{if((c+" "+q).length>w&&c){l.push(c);c=q}else c=(c+" "+q).trim()});l.push(c);return`<text x="${x}" y="${y-(l.length-1)*7}" text-anchor="middle">${l.map((q,i)=>`<tspan x="${x}" dy="${i?14:0}">${esc(q)}</tspan>`).join("")}</text>`};
@@ -70,7 +74,7 @@ ${S.lib.length?`<h3>CONTINUE</h3>`+S.lib.slice(0,3).map((x,i)=>`<button class=op
 const doc=()=>{const d=T.doc;return`<h2 style="font-size:20px">${esc(d.name)}</h2><small>${d.pg} page${d.pg>1?"s":""}${d.pg>300?" · free plan reads the first 300 (Plus unlocks longer PDFs)":""}</small><h3>SELECT WHAT YOU FIND DIFFICULT</h3><p class=m>Tap paragraphs, or highlight text, then explain just that part.</p>${d.paras.slice(0,500).map((p,i)=>`<div class="p ${T.sel.has(i)?"sel":""}" data-a=pick data-v=${i}>${esc(p)}</div>`).join("")}<div class=bar><button class=btn data-a=explain>Explain selected text${T.sel.size?" ("+T.sel.size+")":""}</button></div>`};
 function study_v(){const c=T.cur;if(T.busy&&!c)return`<h2>Study Companion</h2><p class=spin>${esc(T.busy)}</p>`;if(!c)return`<h2>Study Companion</h2>${T.err?`<p class=err>${esc(T.err)}</p>`:""}<p class=m>Upload material or paste a topic from Home, select what’s hard, and it shows up here.</p><button class=btn data-a=nav data-v=home>Go to Home</button>`;
 const o=c.o,x=c.ex,tabs=[["map","Visual map"],["quiz","Quick quiz"],["sum","Summary"],["cards","Flashcards"]];
-let body=!x?`<p class=spin>Building map, summary, flashcards and quiz…</p>`:T.tab=="map"?`<div class="card map">${mm(x.map)}</div>`:T.tab=="sum"?`<div class=card><ul>${(x.summary||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ul></div>`:T.tab=="cards"?`<div class=card>${(x.cards||[]).map(k=>`<p><b>${esc(k.q)}</b><br>${esc(k.a)}</p>`).join("")}</div><button class="btn s" data-a=nav data-v=revise>Practise in Revise</button>`:`<p class=m>Test yourself in Revise, one question at a time.</p><button class=btn data-a=quizgo>Start quick quiz</button>`;
+let body=!(x&&x[{map:"map",sum:"summary",cards:"cards",quiz:"quiz"}[T.tab]])?`<p class=spin>${c.fail?"Some parts didn’t load.":"Loading…"}</p>${c.fail?`<button class="btn s" data-a=retry>Try again</button>`:""}`:T.tab=="map"?`<div class="card map">${mm(x.map)}</div>`:T.tab=="sum"?`<div class=card><ul>${(x.summary||[]).map(s=>`<li>${esc(s)}</li>`).join("")}</ul></div>`:T.tab=="cards"?`<div class=card>${(x.cards||[]).map(k=>`<p><b>${esc(k.q)}</b><br>${esc(k.a)}</p>`).join("")}</div><button class="btn s" data-a=nav data-v=revise>Practise in Revise</button>`:`<p class=m>Test yourself in Revise, one question at a time.</p><button class=btn data-a=quizgo>Start quick quiz</button>`;
 return`<h2 style="font-size:22px">Study Companion</h2><div class=row style="align-items:center"><b style="flex:1">${esc(o.title)}</b><select id=lg style="width:auto">${LANGS.map(l=>`<option ${l==S.lang?"selected":""}>${l}</option>`).join("")}</select></div>
 <h3>UPLOADED NOTES</h3><div class=card><small>${esc(c.text.slice(0,260))}${c.text.length>260?"…":""}</small></div>
 <h3>SIMPLE EXPLANATION</h3><div class=card><b>${esc(o.simple)}</b></div><h3>${esc((o.example_label||"EXAMPLE").toUpperCase())} EXAMPLE</h3><div class=card>${esc(o.example)}</div>
@@ -99,6 +103,7 @@ else if(a=="pick"){tog([...T.sel],0);T.sel.has(+v)?T.sel.delete(+v):T.sel.add(+v
 else if(a=="explain"){const g=String(getSelection()).trim();const t=T.sel.size?[...T.sel].sort((x,y)=>x-y).map(i=>T.doc.paras[i]).join("\n"):g;if(t.length<10){T.err="";alert("Select a paragraph or highlight some text first.");return}study(t)}
 else if(a=="paste"){const t=$("#pt").value.trim();if(t.length<10){T.err="Paste at least a sentence or two.";render();return}study(t)}
 else if(a=="simpler")study(T.cur.text,true);
+else if(a=="retry")study(T.cur.text);
 else if(a=="tab"){T.tab=v;render()}else if(a=="rtab"){T.rt=v;T.err="";render()}
 else if(a=="flip"){T.flip=!T.flip;render()}
 else if(a=="rate"){const k=T.cards[T.ci];const t=new Date().toDateString(),y=new Date(Date.now()-864e5).toDateString();if(S.streak.d!=t){S.streak={d:t,n:S.streak.d==y?S.streak.n+1:1};save()}T.done++;if(v=="0"||v=="1"){T.cards.push(k)}T.cards.splice(T.ci,1);if(T.ci>=T.cards.length)T.ci=0;T.flip=false;render()}
