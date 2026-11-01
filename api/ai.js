@@ -22,18 +22,19 @@ module.exports = async (req, res) => {
     if (typeof prompt !== "string" || prompt.length < 5 || prompt.length > 15000)
       return res.status(400).json({ error: "Invalid prompt" });
     const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
-    const body = JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 8000, responseMimeType: "application/json" }
-    });
-    let r, j;
+    let r, j, think = true;
     for (let i = 0; i < 3; i++) {
+      const body = JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: Object.assign({ maxOutputTokens: 8000, responseMimeType: "application/json" }, think ? { thinkingConfig: { thinkingBudget: 0 } } : {})
+      });
       r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
         body
       });
       j = await r.json();
+      if (r.status === 400 && think) { think = false; i--; continue; }
       if (r.ok || (r.status !== 429 && r.status !== 503 && r.status !== 500)) break;
       await new Promise(x => setTimeout(x, 2000 * (i + 1)));
     }
